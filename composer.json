@@ -13,7 +13,8 @@
     "require": {
         "php": ">=7.4",
         "php-di/php-di": "^6.4",
-        "psr/container": "^1.0|^2.0"
+        "psr/container": "^1.0|^2.0",
+        "hollisho/wp-orm": "dev-master"
     },
     "autoload": {
         "psr-4": {
@@ -23,6 +24,6 @@
             "src/Support/Helpers/helpers.php"
         ]
     },
-    "minimum-stability": "stable",
+    "minimum-stability": "dev",
     "prefer-stable": true
 }
