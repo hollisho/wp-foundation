@@ -76,7 +76,7 @@ class Container
     /**
      * 添加定义文件
      */
-    public function addDefinitions(string|array $definitions): void
+    public function addDefinitions($definitions): void
     {
         if (is_string($definitions)) {
             $definitions = require $definitions;

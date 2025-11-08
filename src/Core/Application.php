@@ -33,7 +33,7 @@ class Application
     /**
      * 注册服务提供者
      */
-    public function register(string|ServiceProvider $provider): self
+    public function register($provider): self
     {
         if (is_string($provider)) {
             $provider = new $provider($this->container, $this);
