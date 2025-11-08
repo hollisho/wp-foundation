@@ -5,10 +5,11 @@ namespace WPFoundation\Core;
 /**
  * 应用引导类
  * 负责管理整个应用的生命周期
+ * 继承 Container，提供统一的容器访问接口
  */
-class Application
+class Application extends Container
 {
-    protected Container $container;
+    protected static ?Application $instance = null;
     protected array $providers = [];
     protected array $bootedProviders = [];
     protected string $basePath;
@@ -16,9 +17,29 @@ class Application
 
     public function __construct(string $basePath = '')
     {
+        parent::__construct();
+
         $this->basePath = $basePath ?: getcwd();
-        $this->container = new Container();
         $this->registerBaseBindings();
+
+        // 设置静态实例
+        static::$instance = $this;
+    }
+
+    /**
+     * 获取应用单例实例
+     */
+    public static function getInstance(): ?Application
+    {
+        return static::$instance;
+    }
+
+    /**
+     * 设置应用实例（用于测试或特殊场景）
+     */
+    public static function setInstance(?Application $app): void
+    {
+        static::$instance = $app;
     }
 
     /**
@@ -26,8 +47,8 @@ class Application
      */
     protected function registerBaseBindings(): void
     {
-        $this->container->singleton(Application::class, fn() => $this);
-        $this->container->singleton('app', fn() => $this);
+        $this->singleton(Application::class, fn() => $this);
+        $this->singleton('app', fn() => $this);
     }
 
     /**
@@ -36,7 +57,7 @@ class Application
     public function register($provider): self
     {
         if (is_string($provider)) {
-            $provider = new $provider($this->container, $this);
+            $provider = new $provider($this);
         }
 
         $this->providers[] = $provider;
@@ -58,13 +79,7 @@ class Application
         }
     }
 
-    /**
-     * 获取容器
-     */
-    public function getContainer(): Container
-    {
-        return $this->container;
-    }
+
 
     /**
      * 设置配置
@@ -89,13 +104,5 @@ class Application
     public function basePath(string $path = ''): string
     {
         return $this->basePath . ($path ? DIRECTORY_SEPARATOR . $path : '');
-    }
-
-    /**
-     * 魔术方法：从容器中解析服务
-     */
-    public function make(string $abstract)
-    {
-        return $this->container->make($abstract);
     }
 }

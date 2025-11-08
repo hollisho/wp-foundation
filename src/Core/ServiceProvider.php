@@ -8,13 +8,19 @@ namespace WPFoundation\Core;
  */
 abstract class ServiceProvider
 {
-    protected Container $container;
-    protected ?Application $app;
+    protected Application $app;
 
-    public function __construct(Container $container, ?Application $app = null)
+    public function __construct(Application $app)
     {
-        $this->container = $container;
         $this->app = $app;
+    }
+
+    /**
+     * 获取容器（Application 本身就是 Container）
+     */
+    protected function container(): Application
+    {
+        return $this->app;
     }
 
     /**
@@ -35,6 +41,6 @@ abstract class ServiceProvider
      */
     protected function config(string $key, $default = null)
     {
-        return $this->app ? $this->app->config($key, $default) : $default;
+        return $this->app->config($key, $default);
     }
 }

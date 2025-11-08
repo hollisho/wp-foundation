@@ -17,13 +17,13 @@ class OrmServiceProvider extends ServiceProvider
     public function register(): void
     {
         // 注册连接管理器
-        $this->container->singleton(ConnectionManager::class, function () {
+        $this->app->singleton(ConnectionManager::class, function () {
             return $this->createConnectionManager();
         });
 
         // 注册别名
-        $this->container->singleton('db', function () {
-            return $this->container->make(ConnectionManager::class);
+        $this->app->singleton('db', function () {
+            return $this->app->make(ConnectionManager::class);
         });
     }
 
