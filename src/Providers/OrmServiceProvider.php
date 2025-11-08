@@ -1,6 +1,6 @@
 <?php
 
-namespace WPFoundation\Database;
+namespace WPFoundation\Providers;
 
 use WPFoundation\Core\ServiceProvider;
 use WPOrm\Database\ConnectionManager;

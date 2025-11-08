@@ -14,6 +14,7 @@ class Router
     protected string $namespace;
     protected array $routes = [];
     protected array $middlewares = [];
+    protected string $prefix = '';
 
     public function __construct(Container $container, string $namespace = 'api/v1')
     {
@@ -74,9 +75,12 @@ class Router
      */
     protected function addRoute($methods, string $route, string $controller, string $action): self
     {
+        // 应用前缀
+        $fullRoute = $this->prefix ? $this->prefix . $route : $route;
+
         $this->routes[] = [
             'methods' => $methods,
-            'route' => $route,
+            'route' => $fullRoute,
             'controller' => $controller,
             'action' => $action,
             'middlewares' => $this->middlewares,
@@ -110,6 +114,7 @@ class Router
     {
         $previousMiddlewares = $this->middlewares;
         $previousNamespace = $this->namespace;
+        $previousPrefix = $this->prefix;
 
         // 应用组中间件
         if (isset($attributes['middleware'])) {
@@ -121,12 +126,18 @@ class Router
             $this->namespace = $attributes['namespace'];
         }
 
+        // 应用组前缀
+        if (isset($attributes['prefix'])) {
+            $this->prefix = $previousPrefix . $attributes['prefix'];
+        }
+
         // 执行回调
         $callback($this);
 
         // 恢复之前的状态
         $this->middlewares = $previousMiddlewares;
         $this->namespace = $previousNamespace;
+        $this->prefix = $previousPrefix;
     }
 
     /**
