@@ -60,8 +60,5 @@ class RouteServiceProvider extends ServiceProvider
 
         // 注册所有路由
         $router->register();
-
-        // 调试：记录路由注册完成
-        error_log('Routes registered successfully');
     }
 }
