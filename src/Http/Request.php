@@ -1,8 +1,16 @@
 <?php
+/**
+ * @license MIT
+ *
+ * Modified by gzbd on 08-November-2025 using {@see https://github.com/BrianHenryIE/strauss}.
+ */
 
 namespace WPFoundation\Http;
 
 use WP_REST_Request;
+use WP_User;
+use WPFoundation\Exceptions\ValidationException;
+use WPFoundation\Validation\Validator;
 
 /**
  * HTTP Request 封装类
@@ -161,7 +169,7 @@ class Request
     /**
      * 获取当前用户
      */
-    public function user(): ?\WP_User
+    public function user(): ?WP_User
     {
         $userId = get_current_user_id();
         return $userId ? get_user_by('id', $userId) : null;
@@ -177,19 +185,44 @@ class Request
 
     /**
      * 验证参数
+     * 
+     * @param array $rules 验证规则
+     * @param array $messages 自定义错误信息
+     * @return array 验证错误（空数组表示验证通过）
+     *
      */
-    public function validate(array $rules): array
+    public function validate(array $rules, array $messages = []): array
     {
-        $errors = [];
-        
-        foreach ($rules as $field => $rule) {
-            $value = $this->get($field);
-            
-            if (strpos($rule, 'required') !== false && empty($value)) {
-                $errors[$field] = "The {$field} field is required.";
-            }
+        $validator = new Validator(
+            $this->all(),
+            $rules,
+            $messages
+        );
+
+        if (!$validator->validate()) {
+            return $validator->errors();
         }
-        
-        return $errors;
+
+        return [];
+    }
+
+    /**
+     * 验证参数并在失败时抛出异常
+     * 
+     * @param array $rules 验证规则
+     * @param array $messages 自定义错误信息
+     * @return array 验证通过的数据
+     * 
+     * @throws ValidationException
+     */
+    public function validateOrFail(array $rules, array $messages = []): array
+    {
+        $errors = $this->validate($rules, $messages);
+
+        if (!empty($errors)) {
+            throw new ValidationException($errors);
+        }
+
+        return $this->all();
     }
 }
