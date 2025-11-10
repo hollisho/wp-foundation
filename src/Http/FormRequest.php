@@ -7,6 +7,9 @@
 
 namespace WPFoundation\Http;
 
+use WPFoundation\Exceptions\ValidationException;
+use WPFoundation\Validation\Validator;
+
 /**
  * Form Request 基类
  * 用于封装请求验证逻辑
