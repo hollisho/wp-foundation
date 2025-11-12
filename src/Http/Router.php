@@ -4,6 +4,7 @@ namespace WPFoundation\Http;
 
 use WPFoundation\Core\Container;
 use WP_REST_Request;
+use WPFoundation\Exceptions\ExceptionHandler;
 
 /**
  * REST API 路由注册器
@@ -194,16 +195,16 @@ class Router
     protected function handleException(\Throwable $exception)
     {
         // 尝试从容器获取异常处理器
-        if ($this->container->has(\WPFoundation\Exceptions\ExceptionHandler::class)) {
-            $handler = $this->container->make(\WPFoundation\Exceptions\ExceptionHandler::class);
+        if ($this->container->has(ExceptionHandler::class)) {
+            $handler = $this->container->make(ExceptionHandler::class);
             return $handler->handle($exception);
         }
 
         // 降级处理：返回基本错误响应
         return Response::serverError(
             defined('WP_DEBUG') && WP_DEBUG
-            ? $exception->getMessage()
-            : '服务器内部错误'
+                ? $exception->getMessage()
+                : '服务器内部错误'
         );
     }
 
