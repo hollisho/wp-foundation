@@ -95,7 +95,7 @@ class Validator
     protected function addError(string $field, string $rule, $parameter = null): void
     {
         $key = "{$field}.{$rule}";
-        
+
         if (isset($this->customMessages[$key])) {
             $message = $this->customMessages[$key];
         } else {
