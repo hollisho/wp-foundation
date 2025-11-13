@@ -2,8 +2,8 @@
 
 namespace WPFoundation\Http;
 
-use WPFoundation\Core\Container;
 use WP_REST_Request;
+use WPFoundation\Core\Container;
 use WPFoundation\Exceptions\ExceptionHandler;
 
 /**
@@ -159,7 +159,10 @@ class Router
             // 使用路由保存的命名空间，而不是当前的 $this->namespace
             $namespace = $route['namespace'] ?? $this->namespace;
 
-            register_rest_route($namespace, $route['route'], [
+            // 转换路由参数格式：{id} => (?P<id>[\d]+)
+            $wpRoute = preg_replace('/\{(\w+)\}/', '(?P<$1>[\w\-]+)', $route['route']);
+
+            register_rest_route($namespace, $wpRoute, [
                 'methods' => $route['methods'],
                 'callback' => $this->createCallback($route),
                 'permission_callback' => $this->createPermissionCallback($route),
@@ -180,8 +183,12 @@ class Router
                 // 从容器解析 Controller
                 $controller = $this->container->make($route['controller']);
 
-                // 调用 Action，注入 Request
-                return call_user_func([$controller, $route['action']], $request);
+                // 获取 URL 参数（如 id）
+                $urlParams = $wpRequest->get_url_params();
+
+                // 调用 Action，注入 Request 和 URL 参数
+                $args = array_merge([$request], array_values($urlParams));
+                return call_user_func_array([$controller, $route['action']], $args);
             } catch (\Throwable $e) {
                 // 使用异常处理器处理异常
                 return $this->handleException($e);
