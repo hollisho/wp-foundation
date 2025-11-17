@@ -226,8 +226,9 @@ class Validator
     protected function validateIn($value, $list): bool
     {
         $values = explode(',', $list);
-        // Convert array values to match the type of $value for proper comparison
+        // Convert both value and array values to proper types for comparison
         if (is_numeric($value)) {
+            $value = $value + 0; // Convert to int or float
             $values = array_map(function($v) {
                 return is_numeric($v) ? $v + 0 : $v;
             }, $values);
