@@ -226,6 +226,12 @@ class Validator
     protected function validateIn($value, $list): bool
     {
         $values = explode(',', $list);
+        // Convert array values to match the type of $value for proper comparison
+        if (is_numeric($value)) {
+            $values = array_map(function($v) {
+                return is_numeric($v) ? $v + 0 : $v;
+            }, $values);
+        }
         return in_array($value, $values, true);
     }
 
