@@ -18,7 +18,7 @@ class AdminMiddleware implements MiddlewareInterface
     public function handle(Request $request, callable $next)
     {
         if (!current_user_can('manage_options')) {
-            return Response::forbidden('需要管理员权限');
+            return Response::forbidden('Administrator permission is required');
         }
 
         return $next($request);

@@ -18,7 +18,7 @@ class AuthMiddleware implements MiddlewareInterface
     public function handle(Request $request, callable $next)
     {
         if (!is_user_logged_in()) {
-            return Response::unauthorized('需要登录');
+            return Response::unauthorized('Login required');
         }
 
         return $next($request);
