@@ -4,7 +4,7 @@ namespace WPFoundation\Providers;
 
 use WPFoundation\Core\ServiceProvider;
 use WPFoundation\Hooks\HookRegistrar;
-use WPFoundation\Http\Router;
+use WPFoundation\Support\Router\Router;
 
 /**
  * 路由服务提供者

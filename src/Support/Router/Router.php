@@ -1,10 +1,20 @@
 <?php
+/**
+ * @license MIT
+ *
+ * Modified by gzbd on 18-November-2025 using {@see https://github.com/BrianHenryIE/strauss}.
+ */
 
-namespace WPFoundation\Http;
+namespace WPFoundation\Support\Router;
 
 use WP_REST_Request;
 use WPFoundation\Core\Container;
 use WPFoundation\Exceptions\ExceptionHandler;
+use ReflectionMethod;
+use WPFoundation\Http\Request;
+use WPFoundation\Http\Response;
+use WPFoundation\Support\Router\Middleware\MiddlewarePipeline;
+use WPFoundation\Support\Router\Middleware\MiddlewareRegistry;
 
 /**
  * REST API 路由注册器
@@ -16,11 +26,18 @@ class Router
     protected array $routes = [];
     protected array $middlewares = [];
     protected string $prefix = '';
+    protected array $groupMiddlewares = [];
+    protected MiddlewareRegistry $middlewareRegistry;
+    protected ParameterResolver $parameterResolver;
+    protected array $beforeMiddleware = [];
+    protected array $afterMiddleware = [];
 
     public function __construct(Container $container, string $namespace = 'api/v1')
     {
         $this->container = $container;
         $this->namespace = $namespace;
+        $this->middlewareRegistry = new MiddlewareRegistry($container);
+        $this->parameterResolver = new ParameterResolver($container);
     }
 
     /**
@@ -79,12 +96,15 @@ class Router
         // 应用前缀
         $fullRoute = $this->prefix ? $this->prefix . $route : $route;
 
+        // 合并当前中间件和组级别的中间件
+        $allMiddlewares = array_merge($this->groupMiddlewares, $this->middlewares);
+
         $this->routes[] = [
             'methods' => $methods,
             'route' => $fullRoute,
             'controller' => $controller,
             'action' => $action,
-            'middlewares' => $this->middlewares,
+            'middlewares' => $allMiddlewares,
             'namespace' => $this->namespace, // 保存当前命名空间
         ];
 
@@ -109,17 +129,57 @@ class Router
     }
 
     /**
+     * 注册全局前置中间件
+     */
+    public function before(callable $callback): self
+    {
+        $this->beforeMiddleware[] = $callback;
+        return $this;
+    }
+
+    /**
+     * 注册全局后置中间件
+     */
+    public function after(callable $callback): self
+    {
+        $this->afterMiddleware[] = $callback;
+        return $this;
+    }
+
+    /**
+     * 注册自定义中间件别名
+     */
+    public function registerMiddleware(string $alias, $middleware): self
+    {
+        $this->middlewareRegistry->register($alias, $middleware);
+        return $this;
+    }
+
+    /**
+     * 获取中间件注册表
+     */
+    public function getMiddlewareRegistry(): MiddlewareRegistry
+    {
+        return $this->middlewareRegistry;
+    }
+
+    /**
      * 路由组
      */
     public function group(array $attributes, callable $callback): void
     {
         $previousMiddlewares = $this->middlewares;
+        $previousGroupMiddlewares = $this->groupMiddlewares;
         $previousNamespace = $this->namespace;
         $previousPrefix = $this->prefix;
 
-        // 应用组中间件
+        // 应用组中间件到组级别的中间件数组
         if (isset($attributes['middleware'])) {
-            $this->middleware($attributes['middleware']);
+            if (is_array($attributes['middleware'])) {
+                $this->groupMiddlewares = array_merge($this->groupMiddlewares, $attributes['middleware']);
+            } else {
+                $this->groupMiddlewares[] = $attributes['middleware'];
+            }
         }
 
         // 应用组命名空间
@@ -132,11 +192,26 @@ class Router
             $this->prefix = $previousPrefix . $attributes['prefix'];
         }
 
+        // 保存当前的组中间件，用于在回调中创建一个新的中间件上下文
+        $currentGroupMiddlewares = $this->groupMiddlewares;
+        
+        // 将临时中间件合并到当前组中间件中（用于处理链式调用如 $router->middleware('auth')->group()）
+        $currentGroupMiddlewares = array_merge($currentGroupMiddlewares, $this->middlewares);
+        $this->middlewares = [];
+
+        // 在执行回调期间使用更新后的组中间件
+        $originalGroupMiddlewares = $this->groupMiddlewares;
+        $this->groupMiddlewares = $currentGroupMiddlewares;
+        
         // 执行回调
         $callback($this);
+        
+        // 恢复组中间件
+        $this->groupMiddlewares = $originalGroupMiddlewares;
 
         // 恢复之前的状态
         $this->middlewares = $previousMiddlewares;
+        $this->groupMiddlewares = $previousGroupMiddlewares;
         $this->namespace = $previousNamespace;
         $this->prefix = $previousPrefix;
     }
@@ -180,20 +255,59 @@ class Router
                 // 创建 Request 对象
                 $request = new Request($wpRequest);
 
-                // 从容器解析 Controller
-                $controller = $this->container->make($route['controller']);
+                // 执行前置中间件
+                foreach ($this->beforeMiddleware as $middleware) {
+                    $result = $middleware($request);
+                    if ($result !== null) {
+                        return $result;
+                    }
+                }
 
-                // 获取 URL 参数（如 id）
-                $urlParams = $wpRequest->get_url_params();
+                // 创建中间件管道
+                $pipeline = new MiddlewarePipeline($this->middlewareRegistry);
+                $pipeline->pipe($route['middlewares']);
 
-                // 调用 Action，注入 Request 和 URL 参数
-                $args = array_merge([$request], array_values($urlParams));
-                return call_user_func_array([$controller, $route['action']], $args);
+                // 定义最终的控制器处理逻辑
+                $destination = function (Request $request) use ($route, $wpRequest) {
+                    return $this->executeController($route, $request, $wpRequest);
+                };
+
+                // 通过中间件管道执行
+                $response = $pipeline->handle($request, $destination);
+
+                // 执行后置中间件
+                foreach ($this->afterMiddleware as $middleware) {
+                    $response = $middleware($request, $response) ?? $response;
+                }
+
+                return $response;
             } catch (\Throwable $e) {
                 // 使用异常处理器处理异常
                 return $this->handleException($e);
             }
         };
+    }
+
+    /**
+     * 执行控制器方法
+     */
+    protected function executeController(array $route, Request $request, WP_REST_Request $wpRequest)
+    {
+        // 从容器解析 Controller
+        $controller = $this->container->make($route['controller']);
+
+        // 使用反射获取方法信息
+        $method = new ReflectionMethod($controller, $route['action']);
+
+        // 解析方法参数
+        $args = $this->parameterResolver->resolve(
+            $method,
+            $wpRequest->get_url_params(),
+            $request
+        );
+
+        // 调用控制器方法
+        return $method->invokeArgs($controller, $args);
     }
 
     /**
@@ -217,27 +331,35 @@ class Router
 
     /**
      * 创建权限回调
+     * 注意：权限检查现在主要在中间件管道中处理
+     * 这里保留基本的权限检查以兼容 WordPress REST API
      */
     protected function createPermissionCallback(array $route): callable
     {
         return function () use ($route) {
-            // 执行中间件
+            // 执行中间件权限检查
             foreach ($route['middlewares'] as $middleware) {
+                // 内置中间件：auth
                 if ($middleware === 'auth') {
                     if (!is_user_logged_in()) {
                         return false;
                     }
-                } elseif ($middleware === 'admin') {
+                }
+                // 内置中间件：admin
+                elseif ($middleware === 'admin') {
                     if (!current_user_can('manage_options')) {
                         return false;
                     }
-                } elseif (is_callable($middleware)) {
+                }
+                // 支持可调用函数作为中间件（向后兼容）
+                elseif (is_callable($middleware)) {
                     if (!$middleware()) {
                         return false;
                     }
                 }
             }
 
+            // 默认允许通过，让中间件管道处理详细的权限逻辑
             return true;
         };
     }
