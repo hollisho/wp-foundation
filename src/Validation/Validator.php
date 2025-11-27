@@ -66,8 +66,8 @@ class Validator
         $ruleName = $parts[0];
         $parameter = $parts[1] ?? null;
 
-        // 如果字段为空且不是 required 规则，跳过验证
-        if ($this->isEmpty($value) && $ruleName !== 'required') {
+        // 如果字段为空且不是 required 或 required_if 规则，跳过验证
+        if ($this->isEmpty($value) && !in_array($ruleName, ['required', 'requiredIf'])) {
             return;
         }
 
@@ -134,6 +134,7 @@ class Validator
             'confirmed' => "The {$field} confirmation does not match.",
             'same' => "The {$field} and {$parameter} must match.",
             'different' => "The {$field} and {$parameter} must be different.",
+            'requiredIf' => "The {$field} field is required when {$parameter}.",
         ];
 
         return $messages[$rule] ?? "The {$field} field is invalid.";
@@ -152,6 +153,26 @@ class Validator
     protected function validateRequired($value): bool
     {
         return !$this->isEmpty($value);
+    }
+
+    protected function validateRequiredIf($value, $parameter): bool
+    {
+        // 参数格式: "field,value" 例如: "submitStep,2"
+        if (!$parameter) {
+            return true;
+        }
+
+        [$fieldName, $fieldValue] = explode(',', $parameter, 2);
+        $fieldName = trim($fieldName);
+        $fieldValue = trim($fieldValue);
+
+        // 如果指定字段的值与条件值匹配，则当前字段必填
+        if (isset($this->data[$fieldName]) && (string)$this->data[$fieldName] === $fieldValue) {
+            return !$this->isEmpty($value);
+        }
+
+        // 如果条件不匹配，则验证通过
+        return true;
     }
 
     protected function validateEmail($value): bool
