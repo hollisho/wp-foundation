@@ -168,18 +168,28 @@ class Router
      */
     public function group(array $attributes, callable $callback): void
     {
-        $previousMiddlewares = $this->middlewares;
+        // 保存当前状态
         $previousGroupMiddlewares = $this->groupMiddlewares;
         $previousNamespace = $this->namespace;
         $previousPrefix = $this->prefix;
 
+        // 构建新的组中间件数组
+        $newGroupMiddlewares = $this->groupMiddlewares;
+
         // 应用组中间件到组级别的中间件数组
         if (isset($attributes['middleware'])) {
             if (is_array($attributes['middleware'])) {
-                $this->groupMiddlewares = array_merge($this->groupMiddlewares, $attributes['middleware']);
+                $newGroupMiddlewares = array_merge($newGroupMiddlewares, $attributes['middleware']);
             } else {
-                $this->groupMiddlewares[] = $attributes['middleware'];
+                $newGroupMiddlewares[] = $attributes['middleware'];
             }
+        }
+
+        // 将链式调用的临时中间件（如 $router->middleware('auth')->group()）合并到组中间件
+        if (!empty($this->middlewares)) {
+            $newGroupMiddlewares = array_merge($newGroupMiddlewares, $this->middlewares);
+            // 清空临时中间件，避免影响后续路由
+            $this->middlewares = [];
         }
 
         // 应用组命名空间
@@ -192,25 +202,13 @@ class Router
             $this->prefix = $previousPrefix . $attributes['prefix'];
         }
 
-        // 保存当前的组中间件，用于在回调中创建一个新的中间件上下文
-        $currentGroupMiddlewares = $this->groupMiddlewares;
-        
-        // 将临时中间件合并到当前组中间件中（用于处理链式调用如 $router->middleware('auth')->group()）
-        $currentGroupMiddlewares = array_merge($currentGroupMiddlewares, $this->middlewares);
-        $this->middlewares = [];
-
-        // 在执行回调期间使用更新后的组中间件
-        $originalGroupMiddlewares = $this->groupMiddlewares;
-        $this->groupMiddlewares = $currentGroupMiddlewares;
+        // 设置新的组中间件
+        $this->groupMiddlewares = $newGroupMiddlewares;
         
         // 执行回调
         $callback($this);
-        
-        // 恢复组中间件
-        $this->groupMiddlewares = $originalGroupMiddlewares;
 
         // 恢复之前的状态
-        $this->middlewares = $previousMiddlewares;
         $this->groupMiddlewares = $previousGroupMiddlewares;
         $this->namespace = $previousNamespace;
         $this->prefix = $previousPrefix;
